@@ -1,4 +1,5 @@
 import NextAuth from 'next-auth';
+import type { DefaultSession } from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
 import AppleProvider from 'next-auth/providers/apple';
 import ResendProvider from 'next-auth/providers/resend';
@@ -29,14 +30,17 @@ const translations = {
   },
 } as const;
 
+// Define custom session type
 export type Session = {
   user: {
     id: string;
     name?: string | null;
     email?: string | null;
     image?: string | null;
+    stripeCustomerId?: string;
+    isActive?: boolean;
   };
-};
+}
 
 export const {
   handlers,
@@ -58,7 +62,7 @@ export const {
     accountsTable: accounts,
     sessionsTable: sessions,
     verificationTokensTable: verificationTokens,
-  }),
+  }) as any, // Type cast needed for version mismatch
   providers: [
     AppleProvider({
       clientId: env.AUTH_APPLE_ID,

@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 import { ThemeProvider } from '@/components/ThemeProvider';
 import { CSPostHogProvider } from '@/components/PostHogProvider';
 import { HighlightProvider } from '@/components/HighlightProvider';
-import { SessionProvider } from 'next-auth/react';
+import { SessionProvider } from '@/components/SessionProvider';
 import TRPCProvider from '@/server/trpc/react';
 
 import { NextIntlClientProvider } from 'next-intl';

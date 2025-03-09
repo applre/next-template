@@ -16,6 +16,7 @@ export const env = createEnv({
 
     AUTH_APPLE_ID: z.string().min(1),
     AUTH_APPLE_SECRET: z.string().min(1),
+    AUTH_SECRET: z.string().min(32),
   },
   client: {
     NEXT_PUBLIC_APP_URL: z.string().url(),
@@ -58,6 +59,7 @@ export const env = createEnv({
 
     AUTH_APPLE_ID: process.env.AUTH_APPLE_ID,
     AUTH_APPLE_SECRET: process.env.AUTH_APPLE_SECRET,
+    AUTH_SECRET: process.env.AUTH_SECRET,
   },
   skipValidation: process.env.NODE_ENV === 'development',
   emptyStringAsUndefined: true,

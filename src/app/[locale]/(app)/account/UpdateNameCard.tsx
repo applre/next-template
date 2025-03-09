@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 
 import { AccountCard, AccountCardFooter, AccountCardBody } from './AccountCard';
-import { updateUser } from '@/server/actions/auth';
+import { updateUser } from '@/server/actions/user';
 
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -26,14 +26,23 @@ export default function UpdateNameCard({ name }: { name: string }) {
   });
 
   const onSubmit = async (data: FormData) => {
-    const formData = new FormData();
-    formData.append('name', data.name);
-
-    const result = await updateUser(formData);
-    if (result.error) {
-      toast.error('Error', { description: result.error });
-    } else if (result.success) {
-      toast.success('Updated User');
+    try {
+      // Get user ID from session or use a placeholder for now
+      // In a real app, you would get this from the session
+      const userId = 'user_id'; // This should come from auth session
+      
+      const [result, error] = await updateUser({
+        id: userId,
+        name: data.name,
+      });
+      
+      if (error) {
+        toast.error('Error', { description: error.message || 'Failed to update name' });
+      } else if (result?.success) {
+        toast.success('Updated User');
+      }
+    } catch (error) {
+      toast.error('Error', { description: 'An unexpected error occurred' });
     }
   };
 
