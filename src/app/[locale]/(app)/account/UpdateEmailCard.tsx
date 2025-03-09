@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { AccountCard, AccountCardFooter, AccountCardBody } from './AccountCard';
-import { updateUser } from '@/server/actions/auth';
+import { updateUser } from '@/server/actions/user';
 
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -25,14 +25,23 @@ export default function UpdateEmailCard({ email }: { email: string }) {
   });
 
   const onSubmit = async (data: FormData) => {
-    const formData = new FormData();
-    formData.append('email', data.email);
-
-    const result = await updateUser(formData);
-    if (result.error) {
-      toast.error('Error', { description: result.error });
-    } else if (result.success) {
-      toast.success('Updated Email');
+    try {
+      // Get user ID from session or use a placeholder for now
+      // In a real app, you would get this from the session
+      const userId = 'user_id'; // This should come from auth session
+      
+      const [result, error] = await updateUser({
+        id: userId,
+        email: data.email,
+      });
+      
+      if (error) {
+        toast.error('Error', { description: error.message || 'Failed to update email' });
+      } else if (result?.success) {
+        toast.success('Updated Email');
+      }
+    } catch (error) {
+      toast.error('Error', { description: 'An unexpected error occurred' });
     }
   };
 
