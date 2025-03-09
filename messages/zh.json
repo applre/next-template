@@ -1,0 +1,31 @@
+{
+  "auth": {
+    "signIn": {
+      "title": "欢迎回来",
+      "description": "输入邮箱以接收登录链接",
+      "email": {
+        "placeholder": "请输入邮箱",
+        "required": "邮箱不能为空",
+        "invalid": "邮箱格式不正确"
+      },
+      "submit": {
+        "default": "发送登录链接",
+        "loading": "发送中..."
+      },
+      "divider": "或使用以下方式登录",
+      "oauth": {
+        "success": "认证成功！",
+        "error": "认证失败，请重试"
+      }
+    },
+    "signOut": {
+      "button": {
+        "default": "退出登录",
+        "loading": "退出中...",
+        "redirecting": "跳转中..."
+      },
+      "success": "已成功退出！",
+      "error": "退出失败，请重试"
+    }
+  }
+}

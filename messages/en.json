@@ -1,0 +1,31 @@
+{
+  "auth": {
+    "signIn": {
+      "title": "Welcome back",
+      "description": "Enter your email to receive magic link.",
+      "email": {
+        "placeholder": "Enter your email",
+        "required": "Email is required",
+        "invalid": "Invalid email address"
+      },
+      "submit": {
+        "default": "Send Magic Link",
+        "loading": "Sending..."
+      },
+      "divider": "Or continue with",
+      "oauth": {
+        "success": "Authentication successful!",
+        "error": "Authentication failed. Please try again."
+      }
+    },
+    "signOut": {
+      "button": {
+        "default": "Sign out",
+        "loading": "Signing out...",
+        "redirecting": "Redirecting..."
+      },
+      "success": "Logout successful!",
+      "error": "Failed to sign out. Please try again."
+    }
+  }
+}

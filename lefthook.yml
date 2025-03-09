@@ -1,0 +1,32 @@
+pre-push:
+  parallel: true
+  commands:
+    test-e2e:
+      run: pnpm test:e2e
+    # packages-audit:
+    #   tags: frontend security
+    #   run: pnpm audit
+    lint:
+      glob: "src/**/*.{ts,tsx}"
+      run: npx biome lint {push_files}
+    format:
+      glob: "src/**/*.{ts,tsx}"
+      run: npx biome format {push_files}
+
+pre-commit:
+  parallel: true
+  commands:
+    # check-types:
+    #   glob: "*.{ts,tsx}"
+    #   run: pnpm run check-types
+    lint:
+      glob: "src/**/*.{js,ts,jsx,tsx}"
+      run: npx biome lint {staged_files}
+    format:
+      glob: "src/**/*.{ts,tsx}"
+      run: npx biome format {staged_files}
+
+commit-msg:
+  commands:
+    commitlint:
+      run: npx --no -- commitlint --edit "$1"
