@@ -1,6 +1,7 @@
 import { timestamp, pgTable, text, primaryKey, integer, varchar, index } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
-import type { AdapterAccountType } from 'next-auth/adapters';
+// Custom account type definition
+type AccountType = 'oauth' | 'email';
 
 export const users = pgTable(
   'user',
@@ -26,7 +27,7 @@ export const accounts = pgTable(
     userId: varchar('userId', { length: 255 })
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
-    type: text('type').$type<AdapterAccountType>().notNull(),
+    type: text('type').$type<'oauth' | 'email'>().notNull(),
     provider: varchar('provider', { length: 255 }).notNull(),
     providerAccountId: varchar('providerAccountId', { length: 255 }).notNull(),
     refresh_token: text('refresh_token'),

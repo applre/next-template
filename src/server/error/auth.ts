@@ -1,4 +1,4 @@
-import { AuthError } from 'next-auth';
+// Custom error handling for authentication
 
 export const AUTH_MESSAGES = {
   // 错误消息
@@ -58,8 +58,8 @@ export function handleAuthError(error: unknown): ActionResponse {
     return { error: error.message };
   }
 
-  // Handle next-auth AuthError
-  if (error instanceof AuthError) {
+  // Handle other errors with type property (like our custom auth errors)
+  if (error instanceof Error && 'type' in error && typeof error.type === 'string') {
     const errorMap: Record<string, string> = {
       [AuthErrorType.EMAIL_SIGN_IN_ERROR]: AUTH_MESSAGES.EMAIL_SEND_FAILED,
       [AuthErrorType.CREDENTIALS_SIGNIN]: AUTH_MESSAGES.INVALID_CREDENTIALS,
@@ -68,7 +68,7 @@ export function handleAuthError(error: unknown): ActionResponse {
       [AuthErrorType.ACCOUNT_NOT_LINKED]: AUTH_MESSAGES.ACCOUNT_LINKED,
     };
 
-    return { error: errorMap[error.type] ?? AUTH_MESSAGES.UNKNOWN_ERROR };
+    return { error: errorMap[error.type as string] ?? AUTH_MESSAGES.UNKNOWN_ERROR };
   }
 
   // Handle other Error
