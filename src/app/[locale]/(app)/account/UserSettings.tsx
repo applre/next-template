@@ -2,10 +2,10 @@
 
 import UpdateNameCard from './UpdateNameCard';
 import UpdateEmailCard from './UpdateEmailCard';
-import { useSession } from 'next-auth/react';
+import { useSession } from '@/components/auth/AuthContext';
 
 export default function UserSettings() {
-  const { data: session } = useSession();
+  const { session } = useSession();
   const { user } = session || {};
 
   return (

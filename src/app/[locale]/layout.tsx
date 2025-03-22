@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 import { ThemeProvider } from '@/components/ThemeProvider';
 import { CSPostHogProvider } from '@/components/PostHogProvider';
 import { HighlightProvider } from '@/components/HighlightProvider';
-import { SessionProvider } from '@/components/SessionProvider';
+import { AuthProvider } from '@/components/auth/AuthContext';
 import TRPCProvider from '@/server/trpc/react';
 
 import { NextIntlClientProvider } from 'next-intl';
@@ -51,7 +51,7 @@ export default async function LocaleLayout({ children, params }: Props) {
         >
           <NextIntlClientProvider messages={messages} locale={locale}>
             <TRPCProvider>
-              <SessionProvider>
+              <AuthProvider>
                 <ThemeProvider
                   attribute="class"
                   defaultTheme="system"
@@ -60,7 +60,7 @@ export default async function LocaleLayout({ children, params }: Props) {
                 >
                   <CSPostHogProvider>{children}</CSPostHogProvider>
                 </ThemeProvider>
-              </SessionProvider>
+              </AuthProvider>
             </TRPCProvider>
           </NextIntlClientProvider>
         </body>
