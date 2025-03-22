@@ -1,47 +1,12 @@
 import { env } from '@/env';
-import { encode as base64Encode, decode as base64Decode } from 'base64-arraybuffer';
+import {
+  encode as base64ArrayBufferEncode,
+  decode as base64ArrayBufferDecode,
+} from 'base64-arraybuffer';
+import { encodeBase64url, decodeBase64url } from '@oslojs/encoding';
 
 // Use Web Crypto API for Edge compatibility
 const webcrypto = globalThis.crypto;
-
-// Browser-compatible base64 encoding/decoding
-function base64ToBase64Url(base64: string): string {
-  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
-function base64UrlToBase64(base64url: string): string {
-  let base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
-  while (base64.length % 4) {
-    base64 += '=';
-  }
-  return base64;
-}
-
-function encodeBase64(str: string): string {
-  if (typeof window !== 'undefined') {
-    return base64ToBase64Url(window.btoa(str));
-  } else {
-    return base64ToBase64Url(Buffer.from(str).toString('base64'));
-  }
-}
-
-function decodeBase64(str: string): string {
-  const base64 = base64UrlToBase64(str);
-  if (typeof window !== 'undefined') {
-    return window.atob(base64);
-  } else {
-    return Buffer.from(base64, 'base64').toString();
-  }
-}
-
-// PASETO key types using Web Crypto API
-export interface PasetoKeys {
-  local: CryptoKey; // For encrypt/decrypt
-  public: {
-    privateKey: CryptoKey; // For signing
-    publicKey: CryptoKey; // For verification
-  };
-}
 
 // Convert string to Uint8Array
 function stringToUint8Array(str: string): Uint8Array {
@@ -51,6 +16,20 @@ function stringToUint8Array(str: string): Uint8Array {
 // Convert Uint8Array to string
 function uint8ArrayToString(arr: Uint8Array): string {
   return new TextDecoder().decode(arr);
+}
+
+// Convert ArrayBuffer to Uint8Array
+function arrayBufferToUint8Array(buffer: ArrayBuffer): Uint8Array {
+  return new Uint8Array(buffer);
+}
+
+// PASETO key types using Web Crypto API
+export interface PasetoKeys {
+  local: CryptoKey; // For encrypt/decrypt
+  public: {
+    privateKey: CryptoKey; // For signing
+    publicKey: CryptoKey; // For verification
+  };
 }
 
 // Generate keys or load from environment
@@ -105,7 +84,8 @@ async function createSignature(payload: string, key: CryptoKey): Promise<string>
     key,
     data,
   );
-  return base64Encode(signature);
+  const signatureBytes = arrayBufferToUint8Array(signature);
+  return encodeBase64url(signatureBytes);
 }
 
 async function verifySignature(
@@ -114,11 +94,11 @@ async function verifySignature(
   key: CryptoKey,
 ): Promise<boolean> {
   const data = stringToUint8Array(payload);
-  const signatureBuffer = base64Decode(signature);
+  const signatureBytes = decodeBase64url(signature);
   return await webcrypto.subtle.verify(
     { name: 'ECDSA', hash: { name: 'SHA-256' } },
     key,
-    signatureBuffer,
+    signatureBytes,
     data,
   );
 }
@@ -168,7 +148,7 @@ export async function createToken(
   const signature = await createSignature(payloadStr, keys.public.privateKey);
 
   // Combine payload and signature (base64 encoded)
-  const encodedPayload = encodeBase64(payloadStr);
+  const encodedPayload = encodeBase64url(stringToUint8Array(payloadStr));
   return `${encodedPayload}.${signature}`;
 }
 
@@ -182,7 +162,8 @@ export async function verifyToken(token: string): Promise<Record<string, unknown
     }
 
     // Decode the payload
-    const payloadStr = decodeBase64(encodedPayload);
+    const payloadBytes = decodeBase64url(encodedPayload);
+    const payloadStr = uint8ArrayToString(payloadBytes);
     const payload = JSON.parse(payloadStr) as Record<string, unknown>;
 
     // Check if token is expired
