@@ -3,7 +3,7 @@ import { db } from '@/server/db/index';
 import { subscriptions } from '@/server/db/schema/subscriptions';
 import { eq } from 'drizzle-orm';
 import { stripe } from '@/server/stripe/index';
-import type { User } from 'next-auth';
+import type { User } from '@/components/auth/AuthContext';
 
 export async function getUserSubscriptionPlan(user: User | undefined) {
   if (!user || !user.id) {

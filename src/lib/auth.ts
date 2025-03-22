@@ -1,36 +1,14 @@
-import NextAuth from 'next-auth';
-import type { DefaultSession } from 'next-auth';
-import GoogleProvider from 'next-auth/providers/google';
-import AppleProvider from 'next-auth/providers/apple';
-import ResendProvider from 'next-auth/providers/resend';
-import { DrizzleAdapter } from '@auth/drizzle-adapter';
+import { cookies } from 'next/headers';
+import { verifyToken, createToken } from './paseto';
+import { getProvider } from './providers';
+import { redirect } from 'next/navigation';
 import { db } from '@/server/db';
+import { users } from '@/server/db/schema/auth';
 import { eq } from 'drizzle-orm';
-import { users, sessions, accounts, verificationTokens } from '@/server/db/schema/auth';
-import { env } from '@/env.js';
-import { EmailVerificationTemplate } from '@/components/emails/EmailVerification';
-import { render } from '@react-email/render';
+import { NextRequest, NextResponse } from 'next/server';
+import { env } from '@/env';
 
-const translations = {
-  en: {
-    preview: 'Verify your email address to complete your {appTitle} registration',
-    greeting: 'Hi,',
-    message: 'We received a request to sign in to {host}. Click the button below to verify:',
-    button: 'Verify Email Address',
-    ignore: "If you didn't request this email, you can safely ignore it.",
-    expiry: 'This link will expire in 24 hours',
-  },
-  zh: {
-    preview: '验证您的邮箱地址以完成 {appTitle} 注册',
-    greeting: '您好，',
-    message: '我们收到了使用登录 {host} 的请求。请点击下面的按钮完成验证：',
-    button: '验证邮箱地址',
-    ignore: '如果您没有请求此邮件，请忽略它。',
-    expiry: '此链接将在24小时后过期',
-  },
-} as const;
-
-// Define custom session type
+// Define custom session type - maintaining the same structure as NextAuth
 export type Session = {
   user: {
     id: string;
@@ -40,87 +18,295 @@ export type Session = {
     stripeCustomerId?: string;
     isActive?: boolean;
   };
+};
+
+// Auth cookie name
+const AUTH_COOKIE = 'paseto-token';
+
+// Auth function - replacement for NextAuth's auth()
+export async function auth(): Promise<Session | null> {
+  try {
+    // Get the cookie store - handle as asynchronous in Next.js 15
+    const cookieList = await cookies();
+    // Use optional chaining for type safety
+    const token = cookieList.get?.(AUTH_COOKIE)?.value;
+
+    if (!token) {
+      return null;
+    }
+
+    const payload = await verifyToken(token);
+
+    if (!payload) {
+      return null;
+    }
+
+    // Check if user exists in database
+    const existingUsers = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, payload.sub as string));
+    const user = existingUsers[0];
+
+    if (!user) {
+      return null;
+    }
+
+    return {
+      user: {
+        id: payload.sub as string,
+        name: payload.name as string | null,
+        email: payload.email as string | null,
+        image: payload.picture as string | null,
+        // Include additional properties if they exist in the user object
+        stripeCustomerId:
+          'stripeCustomerId' in user ? (user.stripeCustomerId as string | undefined) : undefined,
+        isActive: 'isActive' in user ? (user.isActive as boolean | undefined) : undefined,
+      },
+    };
+  } catch (error) {
+    console.error('Auth error:', error);
+    return null;
+  }
 }
 
-export const {
-  handlers,
-  auth,
-  signIn,
-  signOut,
-  handlers: { GET, POST },
-} = NextAuth({
-  pages: {
-    signIn: '/sign-in',
-    verifyRequest: '/verify-email',
-    error: '/error',
-  },
-  session: {
-    strategy: 'jwt',
-  },
-  adapter: DrizzleAdapter(db, {
-    usersTable: users,
-    accountsTable: accounts,
-    sessionsTable: sessions,
-    verificationTokensTable: verificationTokens,
-  }) as any, // Type cast needed for version mismatch
-  providers: [
-    AppleProvider({
-      clientId: env.AUTH_APPLE_ID,
-      clientSecret: env.AUTH_APPLE_SECRET,
-    }),
-    GoogleProvider({
-      clientId: env.AUTH_GOOGLE_ID,
-      clientSecret: env.AUTH_GOOGLE_SECRET,
-    }),
-    ResendProvider({
-      apiKey: env.RESEND_API_KEY,
-      from: env.EMAIL_FROM,
-      sendVerificationRequest: async ({ identifier: to, url, provider }) => {
-        const { host } = new URL(url);
-        const locale = url.includes('/zh/') ? 'zh' : 'en';
+// SignIn function - replacement for NextAuth's signIn()
+export async function signIn(
+  provider: string,
+  options: Record<string, unknown> = {},
+): Promise<{ success: boolean; url?: string; error?: string }> {
+  try {
+    const authProvider = getProvider(provider);
+    return await authProvider.signIn(options);
+  } catch (error) {
+    console.error('Sign in error:', error);
+    return { success: false, error: 'Authentication failed' };
+  }
+}
 
-        await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${provider.apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            from: provider.from,
-            to,
-            subject: locale === 'zh' ? `登录验证 ${host}` : `Verify login ${host}`,
-            html: await render(
-              EmailVerificationTemplate({
-                url,
-                host,
-                translations: translations[locale],
-              }),
-            ),
-            text: `Sign in to ${host}\n${url}\n\n`,
-          }),
+// SignOut function - replacement for NextAuth's signOut()
+export async function signOut(
+  options: { redirectTo?: string } = {},
+): Promise<{ success: boolean }> {
+  // Use a try-catch to handle potential cookie API issues
+  try {
+    const cookieStore = await cookies();
+    cookieStore.set(AUTH_COOKIE, '', { maxAge: 0 });
+  } catch (error) {
+    console.error('Error clearing cookie:', error);
+  }
+
+  if (options.redirectTo) {
+    redirect(options.redirectTo);
+  }
+
+  return { success: true };
+}
+
+// Auth middleware - replacement for NextAuth's middleware
+export function authMiddleware(request: NextRequest) {
+  return async (handler: (request: NextRequest) => Response | Promise<Response>) => {
+    try {
+      const cookieHeader = request.headers.get('cookie') || '';
+      const token = cookieHeader
+        .split(';')
+        .map((c) => c.trim())
+        .find((c) => c.startsWith(`${AUTH_COOKIE}=`))
+        ?.slice(AUTH_COOKIE.length + 1);
+
+      let session = null;
+
+      if (token) {
+        const payload = await verifyToken(token);
+
+        if (payload) {
+          const existingUsers = await db
+            .select()
+            .from(users)
+            .where(eq(users.id, payload.sub as string));
+          const user = existingUsers[0];
+
+          if (user) {
+            session = {
+              user: {
+                id: user.id,
+                name: user.name,
+                email: user.email,
+                image: user.image,
+                // Include additional properties if they exist in the user object
+                stripeCustomerId:
+                  'stripeCustomerId' in user
+                    ? (user.stripeCustomerId as string | undefined)
+                    : undefined,
+                isActive: 'isActive' in user ? (user.isActive as boolean | undefined) : undefined,
+              },
+            };
+          }
+        }
+      }
+
+      // Attach session to request object
+      const req = new NextRequest(request.url, {
+        headers: request.headers,
+      });
+      // Type assertion for auth property
+      (req as NextRequest & { auth?: Session | null }).auth = session;
+
+      return handler(req);
+    } catch (error) {
+      console.error('Auth middleware error:', error);
+      return handler(request);
+    }
+  };
+}
+
+// Handler for API routes - replacement for NextAuth's handlers
+export const handlers = {
+  GET: async function handleGet(request: Request) {
+    const url = new URL(request.url);
+    const path = url.pathname;
+
+    // Handle provider callbacks
+    if (path.startsWith('/api/auth/callback/')) {
+      const provider = path.split('/').pop();
+
+      if (!provider) {
+        return new Response('Invalid provider', { status: 400 });
+      }
+
+      try {
+        const authProvider = getProvider(provider);
+        const params = Object.fromEntries(url.searchParams);
+        const result = await authProvider.callback(params);
+
+        if (!result) {
+          return new Response('Authentication failed', { status: 401 });
+        }
+
+        const { token } = result;
+
+        // Set auth cookie
+        const headers = new Headers();
+        headers.append(
+          'Set-Cookie',
+          `${AUTH_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${60 * 60 * 24 * 30}`,
+        ); // 30 days
+
+        // Redirect to callback URL or default
+        const callbackUrl = url.searchParams.get('callbackUrl') || '/dashboard';
+        headers.append('Location', callbackUrl);
+
+        return new Response(null, {
+          status: 302,
+          headers,
         });
-      },
-    }),
-  ],
-  events: {
-    async linkAccount({ user }) {
-      if (user.id) {
-        await db.update(users).set({ emailVerified: new Date() }).where(eq(users.id, user.id));
+      } catch (error) {
+        console.error('Auth callback error:', error);
+        return new Response('Authentication failed', { status: 500 });
       }
-    },
+    }
+
+    // Handle session endpoint
+    if (path === '/api/auth/session') {
+      const cookieHeader = request.headers.get('cookie') || '';
+      const token = cookieHeader
+        .split(';')
+        .map((c) => c.trim())
+        .find((c) => c.startsWith(`${AUTH_COOKIE}=`))
+        ?.slice(AUTH_COOKIE.length + 1);
+
+      if (!token) {
+        return new Response(JSON.stringify({ user: null }), {
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      try {
+        const payload = await verifyToken(token);
+
+        if (!payload) {
+          return new Response(JSON.stringify({ user: null }), {
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+
+        return new Response(
+          JSON.stringify({
+            user: {
+              id: payload.sub,
+              name: payload.name,
+              email: payload.email,
+              image: payload.picture,
+            },
+          }),
+          {
+            headers: { 'Content-Type': 'application/json' },
+          },
+        );
+      } catch (error) {
+        console.error('Session error:', error);
+        return new Response(JSON.stringify({ user: null }), {
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
+    return new Response('Not found', { status: 404 });
   },
-  callbacks: {
-    async session({ session, token }) {
-      if (token.sub && session.user) {
-        session.user.id = token.sub;
+
+  POST: async function handlePost(request: Request) {
+    const url = new URL(request.url);
+    const path = url.pathname;
+
+    // Handle sign-in requests
+    if (path === '/api/auth/signin') {
+      try {
+        const body = (await request.json()) as Record<string, unknown>;
+
+        if (!body || typeof body !== 'object') {
+          return new Response('Invalid request body', { status: 400 });
+        }
+
+        const provider = body.provider as string;
+        const options = { ...body };
+        delete options.provider;
+
+        if (!provider) {
+          return new Response('Provider is required', { status: 400 });
+        }
+
+        const authProvider = getProvider(provider);
+        const result = await authProvider.signIn(options);
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json' },
+        });
+      } catch (error) {
+        console.error('Sign-in error:', error);
+        return new Response(JSON.stringify({ success: false, error: 'Authentication failed' }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        });
       }
-      return session;
-    },
-    async jwt({ token, user }) {
-      if (user) {
-        token.sub = user.id;
-      }
-      return token;
-    },
+    }
+
+    // Handle sign-out requests
+    if (path === '/api/auth/signout') {
+      const headers = new Headers();
+      headers.append('Set-Cookie', `${AUTH_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
+
+      return new Response(JSON.stringify({ success: true }), {
+        headers: {
+          'Content-Type': 'application/json',
+          ...Object.fromEntries(headers.entries()),
+        },
+      });
+    }
+
+    return new Response('Not found', { status: 404 });
   },
-});
+};
+
+// Exports to maintain the same API as NextAuth
+export const GET = handlers.GET;
+export const POST = handlers.POST;
